@@ -1,0 +1,5 @@
+# macOS
+.DS_Store
+
+# Claude Code harness — local dev tooling, worktrees, settings
+.claude/

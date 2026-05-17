@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "USD → TRY Dönüştürücü",
+  "version": "1.0.0",
+  "description": "Web sayfasında bir USD değeri seçtiğinizde anlık TRY karşılığını tooltip içinde gösterir. İsteğe bağlı sayfa-otomatik tarama modu.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://cdn.jsdelivr.net/*",
+    "https://open.er-api.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "USD → TRY",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

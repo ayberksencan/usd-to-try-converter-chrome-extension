@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>USD → TRY</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="card">
+      <div class="header">
+        <span class="logo">$<span class="arrow">→</span>₺</span>
+        <span class="title">USD → TRY</span>
+      </div>
+
+      <div class="rate-row">
+        <div class="rate-label">Güncel Kur</div>
+        <div id="rate" class="rate-value">—</div>
+      </div>
+
+      <div class="meta-row">
+        <span id="source" class="source">—</span>
+        <span id="updated" class="updated">—</span>
+      </div>
+
+      <button id="refresh" class="refresh-btn" type="button">
+        <span class="refresh-icon">↻</span>
+        <span>Yenile</span>
+      </button>
+
+      <hr class="divider" />
+
+      <label class="toggle-row">
+        <div class="toggle-text">
+          <div class="toggle-title">Sayfayı otomatik tara</div>
+          <div class="toggle-desc">
+            Tüm USD fiyatlarının altını çizer, üzerine gelince TRY karşılığı görünür.
+          </div>
+        </div>
+        <input id="autoscan" type="checkbox" class="toggle-input" />
+        <span class="toggle-switch" aria-hidden="true"></span>
+      </label>
+
+      <div class="footer">
+        Bir metni seçtiğinizde tooltip çıkar — popup'a girmenize gerek yok.
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
