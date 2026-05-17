@@ -427,6 +427,7 @@
       }
       const span = document.createElement("span");
       span.className = HL_CLASS;
+      span.setAttribute("data-fx-trly-wrapped", "1");
       span.setAttribute(HL_AMOUNT_ATTR, String(m.amount));
       span.setAttribute(HL_CURRENCY_ATTR, m.currency);
       span.textContent = m.text;
@@ -440,13 +441,96 @@
     return true;
   }
 
+  function markCompoundElement(el) {
+    if (!el || !el.classList) return false;
+    if (el.classList.contains(HL_CLASS)) return false;
+    if (el.hasAttribute(HL_CURRENCY_ATTR)) return false;
+    if (SKIP_TAGS.has(el.tagName)) return false;
+    if (el.isContentEditable) return false;
+    if (el.closest(`.${HL_CLASS}`)) return false;
+    if (el.querySelector(`.${HL_CLASS}`)) return false;
+
+    const raw = el.textContent;
+    if (!raw) return false;
+    if (raw.length < 3 || raw.length > 60) return false;
+    if (!/\d/.test(raw)) return false;
+    if (!/[\$€£¥]|(?:USD|EUR|GBP|JPY|CHF|CNY|RMB)\b/i.test(raw)) return false;
+
+    const trimmed = raw.replace(/\s+/g, " ").trim();
+    if (!trimmed) return false;
+    const normalized = normalizeSelectionText(trimmed);
+    const matches = findAllFxMatches(normalized);
+    if (matches.length === 0) return false;
+
+    const distinct = new Set(matches.map((m) => `${m.currency}:${m.amount}`));
+    if (distinct.size > 1) return false;
+
+    const totalCoverage = matches.reduce((s, m) => s + m.text.length, 0);
+    if (totalCoverage / normalized.length < 0.6) return false;
+
+    el.classList.add(HL_CLASS);
+    el.setAttribute(HL_AMOUNT_ATTR, String(matches[0].amount));
+    el.setAttribute(HL_CURRENCY_ATTR, matches[0].currency);
+    return true;
+  }
+
+  function collectCompoundCandidates(root) {
+    if (!root) return [];
+    if (root.nodeType === Node.DOCUMENT_NODE) root = document.body;
+    if (!root || root.nodeType !== Node.ELEMENT_NODE) return [];
+    const out = [];
+    const candidates = root.querySelectorAll("span, a, td, em, strong, b, mark, small, ins, del");
+    for (const el of candidates) {
+      if (el.classList.contains(HL_CLASS)) continue;
+      if (el.hasAttribute(HL_CURRENCY_ATTR)) continue;
+      if (SKIP_TAGS.has(el.tagName)) continue;
+      const tc = el.textContent;
+      if (!tc) continue;
+      const len = tc.length;
+      if (len < 3 || len > 60) continue;
+      out.push(el);
+    }
+    return out;
+  }
+
+  function processCompoundBatch(elements) {
+    if (!elements.length) return;
+    const CHUNK = 60;
+    let i = 0;
+    const ric =
+      window.requestIdleCallback ||
+      function (cb) {
+        return setTimeout(() => cb({ timeRemaining: () => 10 }), 0);
+      };
+    function tick() {
+      const end = Math.min(i + CHUNK, elements.length);
+      for (; i < end; i++) {
+        try {
+          markCompoundElement(elements[i]);
+        } catch (_) {
+          /* swallow per-element errors */
+        }
+      }
+      if (i < elements.length) ric(tick);
+    }
+    ric(tick);
+  }
+
   function unwrapAllHighlights() {
-    const spans = document.querySelectorAll(`span.${HL_CLASS}`);
-    spans.forEach((span) => {
+    const wrapped = document.querySelectorAll(
+      `span[data-fx-trly-wrapped="1"]`
+    );
+    wrapped.forEach((span) => {
       const parent = span.parentNode;
       if (!parent) return;
       parent.replaceChild(document.createTextNode(span.textContent), span);
       parent.normalize();
+    });
+    const marked = document.querySelectorAll(`.${HL_CLASS}`);
+    marked.forEach((el) => {
+      el.classList.remove(HL_CLASS);
+      el.removeAttribute(HL_AMOUNT_ATTR);
+      el.removeAttribute(HL_CURRENCY_ATTR);
     });
   }
 
@@ -497,6 +581,7 @@
       const nodes = [...pendingNodes];
       pendingNodes.clear();
       const textNodes = [];
+      const compoundCandidates = [];
       for (const n of nodes) {
         if (!n.isConnected) continue;
         if (n.nodeType === Node.TEXT_NODE) {
@@ -505,9 +590,11 @@
           if (SKIP_TAGS.has(n.tagName)) continue;
           if (n.classList && n.classList.contains(HL_CLASS)) continue;
           textNodes.push(...collectTextNodes(n));
+          compoundCandidates.push(...collectCompoundCandidates(n));
         }
       }
       processBatch(textNodes);
+      processCompoundBatch(compoundCandidates);
     }
     mutationObserver = new MutationObserver((mutations) => {
       for (const mut of mutations) {
@@ -541,6 +628,7 @@
     autoScanEnabled = true;
     if (document.body) {
       processBatch(collectTextNodes(document.body));
+      processCompoundBatch(collectCompoundCandidates(document.body));
       setupMutationObserver();
     }
   }
