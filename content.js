@@ -645,11 +645,12 @@
     (e) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
-      if (!target.classList.contains(HL_CLASS)) return;
-      const amount = parseFloat(target.getAttribute(HL_AMOUNT_ATTR));
-      const currency = target.getAttribute(HL_CURRENCY_ATTR);
+      const host = target.closest(`.${HL_CLASS}`);
+      if (!host) return;
+      const amount = parseFloat(host.getAttribute(HL_AMOUNT_ATTR));
+      const currency = host.getAttribute(HL_CURRENCY_ATTR);
       if (!Number.isFinite(amount) || amount <= 0 || !currency) return;
-      const rect = target.getBoundingClientRect();
+      const rect = host.getBoundingClientRect();
       showTooltipForMatch(currency, amount, rect);
     },
     true
@@ -660,9 +661,11 @@
     (e) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
-      if (!target.classList.contains(HL_CLASS)) return;
+      const host = target.closest(`.${HL_CLASS}`);
+      if (!host) return;
       const related = e.relatedTarget;
-      if (related && tooltipHost && tooltipHost.contains(related)) return;
+      if (related instanceof Element && host.contains(related)) return;
+      if (related instanceof Element && tooltipHost && tooltipHost.contains(related)) return;
       hideTooltip();
     },
     true
