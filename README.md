@@ -1,4 +1,4 @@
-# Döviz → TRY Dönüştürücü
+# USD to TRY Converter Chrome Extension
 
 Chrome eklentisi — herhangi bir web sayfasında bir döviz değeri seçtiğinizde **anlık TRY karşılığını** seçimin yanında küçük bir tooltip ile gösterir. **USD, EUR, GBP, JPY, CHF, CNY** desteklenir.
 
@@ -78,8 +78,8 @@ Cache TTL: 1 saat. Tüm kaynaklar çevrimdışıysa son cache değeri "eski" iş
 Kullanıcı olarak yükleyeceksen yukarıdaki **Chrome Web Store** linkini kullan. Aşağıdaki adımlar yalnızca **geliştirici / katkıda bulunan** içindir:
 
 ```bash
-git clone https://github.com/ayberksencan/usd-to-try.git
-cd usd-to-try
+git clone https://github.com/ayberksencan/usd-to-try-converter-chrome-extension.git
+cd usd-to-try-converter-chrome-extension
 ```
 
 Sonra Chrome'da:

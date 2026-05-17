@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Döviz → TRY Dönüştürücü",
+  "name": "USD to TRY Converter Chrome Extension",
   "version": "2.0.0",
-  "description": "USD, EUR, GBP, JPY, CHF, CNY değerlerini sayfada seçtiğinizde anlık TRY karşılığını gösterir. İsteğe bağlı otomatik tarama modu.",
+  "description": "Select a USD, EUR, GBP, JPY, CHF or CNY value on any webpage and see its TRY equivalent in a tooltip. Optional auto-scan mode highlights all supported prices.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://cdn.jsdelivr.net/*",
@@ -23,7 +23,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Döviz → TRY",
+    "default_title": "USD to TRY Converter",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
