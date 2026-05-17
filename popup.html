@@ -3,19 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>USD → TRY</title>
+    <title>Döviz → TRY</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <div class="card">
       <div class="header">
-        <span class="logo">$<span class="arrow">→</span>₺</span>
-        <span class="title">USD → TRY</span>
+        <span class="logo">FX<span class="arrow">→</span>₺</span>
+        <span class="title">Döviz → TRY</span>
       </div>
 
-      <div class="rate-row">
-        <div class="rate-label">Güncel Kur</div>
-        <div id="rate" class="rate-value">—</div>
+      <div id="rates-list" class="rates-list">
+        <!-- Populated by popup.js -->
       </div>
 
       <div class="meta-row">
@@ -34,7 +33,7 @@
         <div class="toggle-text">
           <div class="toggle-title">Sayfayı otomatik tara</div>
           <div class="toggle-desc">
-            Tüm USD fiyatlarının altını çizer, üzerine gelince TRY karşılığı görünür.
+            Tüm desteklenen para birimi fiyatlarını vurgular; üzerine gelince TRY karşılığı görünür.
           </div>
         </div>
         <input id="autoscan" type="checkbox" class="toggle-input" />
@@ -42,7 +41,7 @@
       </label>
 
       <div class="footer">
-        Bir metni seçtiğinizde tooltip çıkar — popup'a girmenize gerek yok.
+        Bir metni seçtiğinizde tooltip çıkar. Desteklenen: $, €, £, ¥, USD, EUR, GBP, JPY, CHF, CNY/RMB.
       </div>
     </div>
 

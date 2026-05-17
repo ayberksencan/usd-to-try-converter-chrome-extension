@@ -57,28 +57,74 @@ body {
   color: #111827;
 }
 
-.rate-row {
+.rates-list {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 10px 12px;
+  flex-direction: column;
+  gap: 4px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
+  padding: 4px;
+  min-height: 80px;
 }
 
-.rate-label {
+.rates-placeholder {
+  padding: 24px 12px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.rate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: background 100ms ease;
+}
+
+.rate-row:hover {
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.rate-left {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rate-sym {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.rate-code {
+  font-size: 12px;
+  font-weight: 500;
   color: #6b7280;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
-.rate-value {
-  font-size: 20px;
-  font-weight: 700;
+.rate-right {
+  font-size: 15px;
+  font-weight: 600;
   color: #111827;
   font-variant-numeric: tabular-nums;
+}
+
+.rate-right.rate-missing {
+  color: #9ca3af;
+  font-weight: 400;
 }
 
 .meta-row {
@@ -213,16 +259,30 @@ body {
     background: #0f172a;
   }
   .title,
-  .rate-value,
+  .rate-right,
   .toggle-title {
     color: #f3f4f6;
   }
-  .rate-row {
+  .rates-list {
     background: #1e293b;
     border-color: #334155;
   }
-  .rate-label {
+  .rate-row:hover {
+    background: rgba(34, 197, 94, 0.12);
+  }
+  .rate-sym {
+    background: #0f172a;
+    border-color: #334155;
+    color: #f3f4f6;
+  }
+  .rate-code {
     color: #94a3b8;
+  }
+  .rate-right.rate-missing {
+    color: #64748b;
+  }
+  .rates-placeholder {
+    color: #64748b;
   }
   .meta-row,
   .toggle-desc {

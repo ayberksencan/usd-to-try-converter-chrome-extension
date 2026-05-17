@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "USD → TRY Dönüştürücü",
-  "version": "1.0.0",
-  "description": "Web sayfasında bir USD değeri seçtiğinizde anlık TRY karşılığını tooltip içinde gösterir. İsteğe bağlı sayfa-otomatik tarama modu.",
+  "name": "Döviz → TRY Dönüştürücü",
+  "version": "2.0.0",
+  "description": "USD, EUR, GBP, JPY, CHF, CNY değerlerini sayfada seçtiğinizde anlık TRY karşılığını gösterir. İsteğe bağlı otomatik tarama modu.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://cdn.jsdelivr.net/*",
@@ -23,7 +23,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "USD → TRY",
+    "default_title": "Döviz → TRY",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

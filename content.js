@@ -1,9 +1,39 @@
 (() => {
-  if (window.__usdTrlyLoaded) return;
-  window.__usdTrlyLoaded = true;
+  if (window.__fxTrlyLoaded) return;
+  window.__fxTrlyLoaded = true;
 
-  const USD_REGEX_GLOBAL =
-    /(?:\$\s*([0-9]{1,3}(?:[,.\s][0-9]{3})*(?:[,.][0-9]+)?|[0-9]+(?:[,.][0-9]+)?)|USD\s+([0-9]{1,3}(?:[,.\s][0-9]{3})*(?:[,.][0-9]+)?|[0-9]+(?:[,.][0-9]+)?)|([0-9]{1,3}(?:[,.\s][0-9]{3})*(?:[,.][0-9]+)?|[0-9]+(?:[,.][0-9]+)?)\s*USD\b)/gi;
+  const SYMBOL_TO_CURRENCY = {
+    $: "USD",
+    "€": "EUR",
+    "£": "GBP",
+    "¥": "JPY",
+  };
+  const CODE_ALIASES = {
+    USD: "USD",
+    EUR: "EUR",
+    GBP: "GBP",
+    JPY: "JPY",
+    CHF: "CHF",
+    CNY: "CNY",
+    RMB: "CNY",
+  };
+  const SUPPORTED_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "CNY"];
+
+  const AMOUNT_PATTERN =
+    "[0-9]{1,3}(?:[,.\\s][0-9]{3})+(?:[,.][0-9]+)?|[0-9]+(?:[,.][0-9]+)?";
+  const CODES_ALT = Object.keys(CODE_ALIASES).join("|");
+  const SYMBOLS_CHARCLASS = "\\$€£¥";
+
+  const FX_REGEX_GLOBAL = new RegExp(
+    "(?:" +
+      `(?<sym>[${SYMBOLS_CHARCLASS}])\\s*(?<symAmt>${AMOUNT_PATTERN})` +
+      "|" +
+      `(?<preCode>${CODES_ALT})\\s+(?<preAmt>${AMOUNT_PATTERN})` +
+      "|" +
+      `(?<postAmt>${AMOUNT_PATTERN})\\s*(?<postCode>${CODES_ALT})\\b` +
+      ")",
+    "gi"
+  );
 
   const SKIP_TAGS = new Set([
     "SCRIPT",
@@ -18,8 +48,9 @@
     "PRE",
   ]);
 
-  const HL_CLASS = "usd-trly-hl";
-  const HL_ATTR = "data-usd-trly-amount";
+  const HL_CLASS = "fx-trly-hl";
+  const HL_AMOUNT_ATTR = "data-fx-trly-amount";
+  const HL_CURRENCY_ATTR = "data-fx-trly-currency";
 
   const TRY_FORMATTER = new Intl.NumberFormat("tr-TR", {
     style: "currency",
@@ -30,6 +61,16 @@
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   });
+  const CURRENCY_FORMATTERS = Object.fromEntries(
+    SUPPORTED_CURRENCIES.map((c) => [
+      c,
+      new Intl.NumberFormat("tr-TR", {
+        style: "currency",
+        currency: c,
+        maximumFractionDigits: 2,
+      }),
+    ])
+  );
 
   function clearChildren(el) {
     while (el.firstChild) el.removeChild(el.firstChild);
@@ -45,12 +86,9 @@
     if (hasComma && hasDot) {
       const lastComma = s.lastIndexOf(",");
       const lastDot = s.lastIndexOf(".");
-      if (lastDot > lastComma) {
-        return parseFloat(s.replace(/,/g, ""));
-      }
+      if (lastDot > lastComma) return parseFloat(s.replace(/,/g, ""));
       return parseFloat(s.replace(/\./g, "").replace(",", "."));
     }
-
     if (hasComma) {
       const parts = s.split(",");
       if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
@@ -58,7 +96,6 @@
       }
       return parseFloat(s.replace(",", "."));
     }
-
     if (hasDot) {
       const parts = s.split(".");
       if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
@@ -66,39 +103,50 @@
       }
       return parseFloat(s);
     }
-
     return parseFloat(s);
   }
 
-  function parseUsdAmount(text) {
+  function matchToEntry(m) {
+    const g = m.groups || {};
+    let currency, amountStr;
+    if (g.sym) {
+      currency = SYMBOL_TO_CURRENCY[g.sym];
+      amountStr = g.symAmt;
+    } else if (g.preCode) {
+      currency = CODE_ALIASES[g.preCode.toUpperCase()];
+      amountStr = g.preAmt;
+    } else if (g.postCode) {
+      currency = CODE_ALIASES[g.postCode.toUpperCase()];
+      amountStr = g.postAmt;
+    }
+    if (!currency || !amountStr) return null;
+    const value = normalizeNumber(amountStr);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return {
+      start: m.index,
+      end: m.index + m[0].length,
+      text: m[0],
+      amount: value,
+      currency,
+    };
+  }
+
+  function parseFxAmount(text) {
     if (!text || typeof text !== "string") return null;
-    const all = text.match(USD_REGEX_GLOBAL);
-    if (!all) return null;
-    for (const matchStr of all) {
-      const single = matchStr.match(
-        /(?:\$\s*([0-9.,\s]+)|USD\s+([0-9.,\s]+)|([0-9.,\s]+)\s*USD)/i
-      );
-      if (!single) continue;
-      const numStr = single[1] || single[2] || single[3];
-      const value = normalizeNumber(numStr);
-      if (Number.isFinite(value) && value > 0) return value;
+    const iter = text.matchAll(FX_REGEX_GLOBAL);
+    for (const m of iter) {
+      const entry = matchToEntry(m);
+      if (entry) return { amount: entry.amount, currency: entry.currency };
     }
     return null;
   }
 
-  function findAllUsdMatches(text) {
+  function findAllFxMatches(text) {
     const out = [];
-    const iter = text.matchAll(USD_REGEX_GLOBAL);
+    const iter = text.matchAll(FX_REGEX_GLOBAL);
     for (const m of iter) {
-      const numStr = m[1] || m[2] || m[3];
-      const value = normalizeNumber(numStr);
-      if (!Number.isFinite(value) || value <= 0) continue;
-      out.push({
-        start: m.index,
-        end: m.index + m[0].length,
-        text: m[0],
-        amount: value,
-      });
+      const entry = matchToEntry(m);
+      if (entry) out.push(entry);
     }
     return out;
   }
@@ -110,7 +158,7 @@
   function ensureTooltip() {
     if (tooltipEl) return tooltipEl;
     tooltipHost = document.createElement("div");
-    tooltipHost.id = "usd-trly-tooltip-host";
+    tooltipHost.id = "fx-trly-tooltip-host";
     Object.assign(tooltipHost.style, {
       position: "absolute",
       top: "0",
@@ -131,7 +179,7 @@
         padding: 8px 10px;
         border-radius: 8px;
         box-shadow: 0 8px 24px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.05);
-        max-width: 280px;
+        max-width: 320px;
         opacity: 0;
         transform: translateY(4px);
         transition: opacity 120ms ease, transform 120ms ease;
@@ -162,20 +210,26 @@
     return `${days} gün önce`;
   }
 
-  function renderTooltipContent(usdAmount, rate) {
+  function renderTooltipContent(currency, amount, rateInfo) {
     const el = ensureTooltip();
     el.classList.remove("error");
     clearChildren(el);
-    const tryValue = usdAmount * rate.value;
+    const rate = rateInfo.rates[currency];
+    if (!Number.isFinite(rate) || rate <= 0) {
+      renderTooltipError(`${currency} kuru bulunamadı`);
+      return;
+    }
+    const tryValue = amount * rate;
     const amountDiv = document.createElement("div");
     amountDiv.className = "amount";
     amountDiv.textContent = `≈ ${TRY_FORMATTER.format(tryValue)}`;
     const metaDiv = document.createElement("div");
     metaDiv.className = "meta";
-    const rateStr = RATE_FORMATTER.format(rate.value);
-    const agoStr = formatAgo(rate.fetchedAt);
-    const staleStr = rate.stale ? " · eski" : "";
-    metaDiv.textContent = `$${usdAmount.toLocaleString("tr-TR")} · kur ${rateStr} · ${agoStr}${staleStr}`;
+    const sourceStr = CURRENCY_FORMATTERS[currency].format(amount);
+    const rateStr = RATE_FORMATTER.format(rate);
+    const agoStr = formatAgo(rateInfo.fetchedAt);
+    const staleStr = rateInfo.stale ? " · eski" : "";
+    metaDiv.textContent = `${sourceStr} · 1 ${currency} = ${rateStr} ₺ · ${agoStr}${staleStr}`;
     el.appendChild(amountDiv);
     el.appendChild(metaDiv);
   }
@@ -211,9 +265,7 @@
     if (left < minLeft) left = minLeft;
     if (left > maxLeft) left = maxLeft;
 
-    if (top < scrollY + 4) {
-      top = rect.bottom + scrollY + margin;
-    }
+    if (top < scrollY + 4) top = rect.bottom + scrollY + margin;
 
     el.style.left = `${Math.round(left)}px`;
     el.style.top = `${Math.round(top)}px`;
@@ -234,10 +286,10 @@
     }
   }
 
-  async function fetchRate(force = false) {
+  async function fetchRates(force = false) {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage(
-        { type: force ? "forceRefresh" : "getRate" },
+        { type: force ? "forceRefresh" : "getRates" },
         (response) => {
           if (chrome.runtime.lastError) {
             resolve({ ok: false, error: chrome.runtime.lastError.message });
@@ -249,22 +301,22 @@
     });
   }
 
-  async function showTooltipForAmount(usdAmount, rect) {
+  async function showTooltipForMatch(currency, amount, rect) {
     if (tooltipHideTimer) {
       clearTimeout(tooltipHideTimer);
       tooltipHideTimer = null;
     }
-    const response = await fetchRate(false);
+    const response = await fetchRates(false);
     if (!response.ok) {
       renderTooltipError(response.error);
       positionTooltip(rect);
       return;
     }
-    renderTooltipContent(usdAmount, response.rate);
+    renderTooltipContent(currency, amount, response.rates);
     positionTooltip(rect);
   }
 
-  let lastSelectionAmount = null;
+  let lastSelectionKey = null;
   let selectionTimer = null;
 
   function handleSelectionChange() {
@@ -272,18 +324,18 @@
     selectionTimer = setTimeout(() => {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-        if (lastSelectionAmount !== null) {
-          lastSelectionAmount = null;
+        if (lastSelectionKey !== null) {
+          lastSelectionKey = null;
           hideTooltip();
         }
         return;
       }
       const text = sel.toString();
       if (!text || text.length > 200) return;
-      const amount = parseUsdAmount(text);
-      if (amount === null) {
-        if (lastSelectionAmount !== null) {
-          lastSelectionAmount = null;
+      const parsed = parseFxAmount(text);
+      if (!parsed) {
+        if (lastSelectionKey !== null) {
+          lastSelectionKey = null;
           hideTooltip();
         }
         return;
@@ -291,8 +343,8 @@
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) return;
-      lastSelectionAmount = amount;
-      showTooltipForAmount(amount, rect);
+      lastSelectionKey = `${parsed.currency}:${parsed.amount}`;
+      showTooltipForMatch(parsed.currency, parsed.amount, rect);
     }, 120);
   }
 
@@ -324,7 +376,7 @@
     while (el) {
       if (SKIP_TAGS.has(el.tagName)) return true;
       if (el.isContentEditable) return true;
-      if (el.hasAttribute && el.hasAttribute("data-usd-trly-skip")) return true;
+      if (el.hasAttribute && el.hasAttribute("data-fx-trly-skip")) return true;
       if (el.classList && el.classList.contains(HL_CLASS)) return true;
       el = el.parentElement;
     }
@@ -334,8 +386,8 @@
   function wrapTextNode(node) {
     const text = node.nodeValue;
     if (!text || text.length < 2) return false;
-    if (!/\$|USD/i.test(text)) return false;
-    const matches = findAllUsdMatches(text);
+    if (!/[\$€£¥]|USD|EUR|GBP|JPY|CHF|CNY|RMB/i.test(text)) return false;
+    const matches = findAllFxMatches(text);
     if (matches.length === 0) return false;
 
     const frag = document.createDocumentFragment();
@@ -346,7 +398,8 @@
       }
       const span = document.createElement("span");
       span.className = HL_CLASS;
-      span.setAttribute(HL_ATTR, String(m.amount));
+      span.setAttribute(HL_AMOUNT_ATTR, String(m.amount));
+      span.setAttribute(HL_CURRENCY_ATTR, m.currency);
       span.textContent = m.text;
       frag.appendChild(span);
       cursor = m.end;
@@ -373,9 +426,7 @@
     if (!root) return out;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
-        if (!node.nodeValue || node.nodeValue.length < 2) {
-          return NodeFilter.FILTER_REJECT;
-        }
+        if (!node.nodeValue || node.nodeValue.length < 2) return NodeFilter.FILTER_REJECT;
         if (shouldSkipNode(node)) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       },
@@ -478,10 +529,11 @@
       const target = e.target;
       if (!(target instanceof Element)) return;
       if (!target.classList.contains(HL_CLASS)) return;
-      const amount = parseFloat(target.getAttribute(HL_ATTR));
-      if (!Number.isFinite(amount) || amount <= 0) return;
+      const amount = parseFloat(target.getAttribute(HL_AMOUNT_ATTR));
+      const currency = target.getAttribute(HL_CURRENCY_ATTR);
+      if (!Number.isFinite(amount) || amount <= 0 || !currency) return;
       const rect = target.getBoundingClientRect();
-      showTooltipForAmount(amount, rect);
+      showTooltipForMatch(currency, amount, rect);
     },
     true
   );

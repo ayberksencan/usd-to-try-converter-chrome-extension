@@ -1,21 +1,55 @@
 const CACHE_TTL_MS = 60 * 60 * 1000;
-const STORAGE_KEY_RATE = "rate";
+const STORAGE_KEY_RATES = "rates";
 const STORAGE_KEY_SETTINGS = "settings";
+
+const TARGET_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "CNY"];
 
 const SOURCES = [
   {
     name: "jsdelivr",
     url: "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
-    extract: (data) => data?.usd?.try,
+    extract: (data) => {
+      const usd = data?.usd;
+      if (!usd) return null;
+      const usdToTry = usd.try;
+      if (!Number.isFinite(usdToTry) || usdToTry <= 0) return null;
+      const rates = {};
+      for (const code of TARGET_CURRENCIES) {
+        if (code === "USD") {
+          rates.USD = usdToTry;
+          continue;
+        }
+        const usdToCode = usd[code.toLowerCase()];
+        if (!Number.isFinite(usdToCode) || usdToCode <= 0) return null;
+        rates[code] = usdToTry / usdToCode;
+      }
+      return rates;
+    },
   },
   {
     name: "open-er-api",
     url: "https://open.er-api.com/v6/latest/USD",
-    extract: (data) => data?.rates?.TRY,
+    extract: (data) => {
+      const r = data?.rates;
+      if (!r) return null;
+      const usdToTry = r.TRY;
+      if (!Number.isFinite(usdToTry) || usdToTry <= 0) return null;
+      const rates = {};
+      for (const code of TARGET_CURRENCIES) {
+        if (code === "USD") {
+          rates.USD = usdToTry;
+          continue;
+        }
+        const usdToCode = r[code];
+        if (!Number.isFinite(usdToCode) || usdToCode <= 0) return null;
+        rates[code] = usdToTry / usdToCode;
+      }
+      return rates;
+    },
   },
 ];
 
-async function fetchFreshRate() {
+async function fetchFreshRates() {
   let lastError = null;
   for (const src of SOURCES) {
     try {
@@ -25,46 +59,53 @@ async function fetchFreshRate() {
         continue;
       }
       const data = await res.json();
-      const value = src.extract(data);
-      if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-        lastError = new Error(`${src.name} returned invalid rate`);
+      const rates = src.extract(data);
+      if (!rates) {
+        lastError = new Error(`${src.name} returned invalid rate set`);
         continue;
       }
-      console.log(`[USD-TRY] Rate fetched from ${src.name}: ${value}`);
-      return { value, fetchedAt: Date.now(), source: src.name };
+      console.log(`[FX-TRY] Rates from ${src.name}:`, rates);
+      return { rates, fetchedAt: Date.now(), source: src.name };
     } catch (err) {
       lastError = err;
-      console.warn(`[USD-TRY] Source ${src.name} failed:`, err.message);
+      console.warn(`[FX-TRY] Source ${src.name} failed:`, err.message);
     }
   }
   throw lastError ?? new Error("All sources failed");
 }
 
-async function getCachedRate() {
-  const result = await chrome.storage.local.get(STORAGE_KEY_RATE);
-  return result[STORAGE_KEY_RATE] ?? null;
+async function getCachedRates() {
+  const result = await chrome.storage.local.get(STORAGE_KEY_RATES);
+  return result[STORAGE_KEY_RATES] ?? null;
 }
 
-async function setCachedRate(rate) {
-  await chrome.storage.local.set({ [STORAGE_KEY_RATE]: rate });
+async function setCachedRates(value) {
+  await chrome.storage.local.set({ [STORAGE_KEY_RATES]: value });
 }
 
-function isFresh(rate) {
-  return rate && Date.now() - rate.fetchedAt < CACHE_TTL_MS;
+function isFresh(entry) {
+  return entry && Date.now() - entry.fetchedAt < CACHE_TTL_MS;
 }
 
-async function getRate({ force = false } = {}) {
-  const cached = await getCachedRate();
-  if (!force && isFresh(cached)) {
+function hasAllTargets(entry) {
+  if (!entry || !entry.rates) return false;
+  return TARGET_CURRENCIES.every(
+    (c) => Number.isFinite(entry.rates[c]) && entry.rates[c] > 0
+  );
+}
+
+async function getRates({ force = false } = {}) {
+  const cached = await getCachedRates();
+  if (!force && isFresh(cached) && hasAllTargets(cached)) {
     return { ...cached, fromCache: true };
   }
   try {
-    const fresh = await fetchFreshRate();
-    await setCachedRate(fresh);
+    const fresh = await fetchFreshRates();
+    await setCachedRates(fresh);
     return { ...fresh, fromCache: false };
   } catch (err) {
-    if (cached) {
-      console.warn("[USD-TRY] Fetch failed, serving stale cache:", err.message);
+    if (cached && hasAllTargets(cached)) {
+      console.warn("[FX-TRY] Fetch failed, serving stale cache:", err.message);
       return { ...cached, fromCache: true, stale: true };
     }
     throw err;
@@ -74,23 +115,26 @@ async function getRate({ force = false } = {}) {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== "object") return false;
 
-  if (msg.type === "getRate") {
-    getRate({ force: false })
-      .then((rate) => sendResponse({ ok: true, rate }))
+  if (msg.type === "getRates") {
+    getRates({ force: false })
+      .then((rates) => sendResponse({ ok: true, rates }))
       .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
   }
 
   if (msg.type === "forceRefresh") {
-    getRate({ force: true })
-      .then((rate) => sendResponse({ ok: true, rate }))
+    getRates({ force: true })
+      .then((rates) => sendResponse({ ok: true, rates }))
       .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
   }
 
   if (msg.type === "getSettings") {
     chrome.storage.local.get(STORAGE_KEY_SETTINGS).then((res) => {
-      sendResponse({ ok: true, settings: res[STORAGE_KEY_SETTINGS] ?? { autoScan: false } });
+      sendResponse({
+        ok: true,
+        settings: res[STORAGE_KEY_SETTINGS] ?? { autoScan: false },
+      });
     });
     return true;
   }
@@ -106,7 +150,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  getRate({ force: false }).catch((err) => {
-    console.warn("[USD-TRY] Initial rate fetch failed:", err.message);
+  getRates({ force: false }).catch((err) => {
+    console.warn("[FX-TRY] Initial rate fetch failed:", err.message);
   });
 });
