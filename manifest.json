@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "USD to TRY Converter Chrome Extension",
   "version": "2.0.0",
-  "description": "Select a USD, EUR, GBP, JPY, CHF or CNY value on any webpage and see its TRY equivalent in a tooltip. Optional auto-scan mode highlights all supported prices.",
+  "description": "Select USD, EUR, GBP, JPY, CHF, or CNY on any webpage and see the Turkish Lira (TRY) equivalent in a tooltip.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://cdn.jsdelivr.net/*",
