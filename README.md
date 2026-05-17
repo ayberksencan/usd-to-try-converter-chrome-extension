@@ -4,8 +4,6 @@ Chrome eklentisi — herhangi bir web sayfasında bir döviz değeri seçtiğini
 
 [![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Yay%C4%B1na%20Haz%C4%B1rlan%C4%B1yor-yellow?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/PLACEHOLDER_EXTENSION_ID)
 
-> **Not (geliştirici):** Eklenti Chrome Web Store onay sürecinden sonra yukarıdaki linkten tek tıklamayla yüklenebilir olacak. Onay sonrası README'deki `PLACEHOLDER_EXTENSION_ID` ve badge'i gerçek değerle değiştirin (aşağıda "Chrome Web Store'a Yayınlama" bölümüne bakın).
-
 ## Desteklenen Para Birimleri
 
 | Kod | Simge(ler) | Para Birimi |
@@ -68,61 +66,6 @@ EUR/TRY = (USD/TRY) / (USD/EUR)
 ```
 
 Cache TTL: 1 saat. Tüm kaynaklar çevrimdışıysa son cache değeri "eski" işaretiyle gösterilir.
-
----
-
-## Geliştiriciler için
-
-### Kaynaktan kurulum (test / katkı)
-
-Kullanıcı olarak yükleyeceksen yukarıdaki **Chrome Web Store** linkini kullan. Aşağıdaki adımlar yalnızca **geliştirici / katkıda bulunan** içindir:
-
-```bash
-git clone https://github.com/ayberksencan/usd-to-try-converter-chrome-extension.git
-cd usd-to-try-converter-chrome-extension
-```
-
-Sonra Chrome'da:
-1. `chrome://extensions` → Geliştirici modu açık
-2. "Paketlenmemiş öğe yükle" → bu klasörü seç
-
-### Chrome Web Store'a Yayınlama (proje sahibi)
-
-Kullanıcıların tek-tık ile ekleyebilmesi için Chrome Web Store'a yayınlamak gerekir:
-
-1. **Geliştirici hesabı oluştur**: https://chrome.google.com/webstore/devconsole — tek seferlik $5 kayıt ücreti
-2. **Paketle**:
-   ```bash
-   cd "USD to TRY"
-   zip -r -FS extension.zip . -x "*.git*" "*.DS_Store" "README.md" ".gitignore"
-   ```
-3. **Yükle**: Developer Dashboard'da "New Item" → ZIP yükle
-4. **Liste bilgileri**: ekran görüntüsü (1280×800), açıklama, kategori (Productivity), ikon
-5. **Gizlilik beyanı**: bu eklenti hiçbir veri toplamaz; "Single purpose: convert foreign currency values to TRY"
-6. **İnceleme**: tipik 1-3 gün
-7. **Yayınlandıktan sonra**:
-   - Web Store URL'sini al: `https://chromewebstore.google.com/detail/<extension-id>`
-   - Bu README'deki `PLACEHOLDER_EXTENSION_ID` ve badge'i güncelle:
-     ```markdown
-     [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/<extension-id>?style=for-the-badge&logo=googlechrome&logoColor=white&color=22c55e&label=Chrome%20Web%20Store)](https://chromewebstore.google.com/detail/<extension-id>)
-     ```
-
-### Proje yapısı
-
-```
-.
-├── manifest.json       # Manifest V3 + izinler
-├── background.js       # Service worker: kur çekme, cross-rate, cache, fallback
-├── content.js          # Seçim listener, multi-currency parser, auto-scan, Shadow DOM tooltip
-├── content.css         # Auto-scan altçizgi stili
-├── popup.html/js/css   # Popup UI (6 para birimi listesi + dark mode)
-└── icons/              # 16/48/128 px
-```
-
-### Sürüm Geçmişi
-
-- **2.0.0** — Multi-currency: EUR, GBP, JPY, CHF, CNY eklendi
-- **1.0.0** — İlk sürüm, sadece USD → TRY
 
 ## Lisans
 
