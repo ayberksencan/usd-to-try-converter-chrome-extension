@@ -28,6 +28,8 @@
     "(?:" +
       `(?<sym>[${SYMBOLS_CHARCLASS}])\\s*(?<symAmt>${AMOUNT_PATTERN})` +
       "|" +
+      `(?<postSymAmt>${AMOUNT_PATTERN})\\s*(?<postSym>[${SYMBOLS_CHARCLASS}])` +
+      "|" +
       `(?<preCode>${CODES_ALT})\\s+(?<preAmt>${AMOUNT_PATTERN})` +
       "|" +
       `(?<postAmt>${AMOUNT_PATTERN})\\s*(?<postCode>${CODES_ALT})\\b` +
@@ -112,6 +114,9 @@
     if (g.sym) {
       currency = SYMBOL_TO_CURRENCY[g.sym];
       amountStr = g.symAmt;
+    } else if (g.postSym) {
+      currency = SYMBOL_TO_CURRENCY[g.postSym];
+      amountStr = g.postSymAmt;
     } else if (g.preCode) {
       currency = CODE_ALIASES[g.preCode.toUpperCase()];
       amountStr = g.preAmt;
