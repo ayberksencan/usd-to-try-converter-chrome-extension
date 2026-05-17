@@ -78,6 +78,29 @@
     while (el.firstChild) el.removeChild(el.firstChild);
   }
 
+  function normalizeSelectionText(text) {
+    if (!text) return text;
+    const supDigits = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+    text = text.replace(/(\d+)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, (_, intPart, supPart) => {
+      const frac = supPart.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (ch) =>
+        String(supDigits.indexOf(ch))
+      );
+      return `${intPart},${frac}`;
+    });
+    text = text.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (ch) =>
+      String(supDigits.indexOf(ch))
+    );
+    text = text.replace(
+      /(\d+)[\s  ]+(\d{1,2})[\s  ]*([$€£¥])/g,
+      "$1,$2$3"
+    );
+    text = text.replace(
+      /(\d+)[\s  ]+(\d{1,2})[\s  ]+(USD|EUR|GBP|JPY|CHF|CNY|RMB)\b/gi,
+      "$1,$2 $3"
+    );
+    return text;
+  }
+
   function normalizeNumber(raw) {
     if (!raw) return NaN;
     const s = String(raw).trim().replace(/\s/g, "");
@@ -138,7 +161,8 @@
 
   function parseFxAmount(text) {
     if (!text || typeof text !== "string") return null;
-    const iter = text.matchAll(FX_REGEX_GLOBAL);
+    const normalized = normalizeSelectionText(text);
+    const iter = normalized.matchAll(FX_REGEX_GLOBAL);
     for (const m of iter) {
       const entry = matchToEntry(m);
       if (entry) return { amount: entry.amount, currency: entry.currency };
