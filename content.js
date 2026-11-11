@@ -714,8 +714,8 @@
           attachToNewShadowRoots(n, pendingNodes, scheduleFlush);
         }
       }
-      processBatch(textNodes);
       processCompoundBatch(compoundCandidates);
+      processBatch(textNodes);
     }
     function scheduleFlush() {
       if (!scheduled && pendingNodes.size > 0) {
@@ -783,8 +783,12 @@
     if (autoScanEnabled) return;
     autoScanEnabled = true;
     if (document.body) {
-      processBatch(collectTextNodes(document.body));
+      // Compound FIRST so whole-price containers get marked, then text-node
+      // pass skips their children via shouldSkipNode (parent HL class check).
+      // This makes the entire <span>€105.00 Member Price</span> hover-sensitive,
+      // not just the digits.
       processCompoundBatch(collectCompoundCandidates(document.body));
+      processBatch(collectTextNodes(document.body));
       setupMutationObserver();
     }
   }
