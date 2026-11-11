@@ -557,24 +557,40 @@
     return true;
   }
 
+  const COMPOUND_TAG_SELECTOR =
+    "span, a, td, em, strong, b, mark, small, ins, del, p, h1, h2, h3, h4, h5, h6, li, label, button, dd, dt";
+
+  function forEachShadowRoot(root, cb) {
+    if (!root) return;
+    const walker = root.querySelectorAll ? root.querySelectorAll("*") : [];
+    for (const el of walker) {
+      if (el.shadowRoot) {
+        cb(el.shadowRoot);
+        forEachShadowRoot(el.shadowRoot, cb);
+      }
+    }
+  }
+
   function collectCompoundCandidates(root) {
     if (!root) return [];
     if (root.nodeType === Node.DOCUMENT_NODE) root = document.body;
-    if (!root || root.nodeType !== Node.ELEMENT_NODE) return [];
+    if (!root || (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE)) return [];
     const out = [];
-    const candidates = root.querySelectorAll(
-      "span, a, td, em, strong, b, mark, small, ins, del, p, h1, h2, h3, h4, h5, h6, li, label, button, dd, dt"
-    );
-    for (const el of candidates) {
-      if (el.classList.contains(HL_CLASS)) continue;
-      if (el.hasAttribute(HL_CURRENCY_ATTR)) continue;
-      if (SKIP_TAGS.has(el.tagName)) continue;
-      const tc = el.textContent;
-      if (!tc) continue;
-      const len = tc.length;
-      if (len < 3 || len > 100) continue;
-      out.push(el);
-    }
+    const pushFrom = (scope) => {
+      if (!scope || !scope.querySelectorAll) return;
+      for (const el of scope.querySelectorAll(COMPOUND_TAG_SELECTOR)) {
+        if (el.classList.contains(HL_CLASS)) continue;
+        if (el.hasAttribute(HL_CURRENCY_ATTR)) continue;
+        if (SKIP_TAGS.has(el.tagName)) continue;
+        const tc = el.textContent;
+        if (!tc) continue;
+        const len = tc.length;
+        if (len < 3 || len > 100) continue;
+        out.push(el);
+      }
+    };
+    pushFrom(root);
+    forEachShadowRoot(root, pushFrom);
     return out;
   }
 
@@ -602,35 +618,46 @@
   }
 
   function unwrapAllHighlights() {
-    const wrapped = document.querySelectorAll(
-      `span[data-fx-trly-wrapped="1"]`
-    );
-    wrapped.forEach((span) => {
-      const parent = span.parentNode;
-      if (!parent) return;
-      parent.replaceChild(document.createTextNode(span.textContent), span);
-      parent.normalize();
-    });
-    const marked = document.querySelectorAll(`.${HL_CLASS}`);
-    marked.forEach((el) => {
-      el.classList.remove(HL_CLASS);
-      el.removeAttribute(HL_AMOUNT_ATTR);
-      el.removeAttribute(HL_CURRENCY_ATTR);
-    });
+    const scopes = [document];
+    forEachShadowRoot(document.body, (sr) => scopes.push(sr));
+    for (const scope of scopes) {
+      const wrapped = scope.querySelectorAll
+        ? scope.querySelectorAll(`span[data-fx-trly-wrapped="1"]`)
+        : [];
+      wrapped.forEach((span) => {
+        const parent = span.parentNode;
+        if (!parent) return;
+        parent.replaceChild(document.createTextNode(span.textContent), span);
+        parent.normalize();
+      });
+      const marked = scope.querySelectorAll
+        ? scope.querySelectorAll(`.${HL_CLASS}`)
+        : [];
+      marked.forEach((el) => {
+        el.classList.remove(HL_CLASS);
+        el.removeAttribute(HL_AMOUNT_ATTR);
+        el.removeAttribute(HL_CURRENCY_ATTR);
+      });
+    }
   }
 
   function collectTextNodes(root) {
     const out = [];
     if (!root) return out;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (!node.nodeValue || node.nodeValue.length < 2) return NodeFilter.FILTER_REJECT;
-        if (shouldSkipNode(node)) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
-    let n;
-    while ((n = walker.nextNode())) out.push(n);
+    const walkScope = (scope) => {
+      if (!scope) return;
+      const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          if (!node.nodeValue || node.nodeValue.length < 2) return NodeFilter.FILTER_REJECT;
+          if (shouldSkipNode(node)) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      });
+      let n;
+      while ((n = walker.nextNode())) out.push(n);
+    };
+    walkScope(root);
+    forEachShadowRoot(root, walkScope);
     return out;
   }
 
@@ -657,6 +684,9 @@
     ric(tick);
   }
 
+  let shadowObservers = [];
+  let observedShadowRoots = new WeakSet();
+
   function setupMutationObserver() {
     if (mutationObserver) return;
     const pendingNodes = new Set();
@@ -676,28 +706,65 @@
           if (n.classList && n.classList.contains(HL_CLASS)) continue;
           textNodes.push(...collectTextNodes(n));
           compoundCandidates.push(...collectCompoundCandidates(n));
+          attachToNewShadowRoots(n, pendingNodes, scheduleFlush);
+        } else if (n.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+          textNodes.push(...collectTextNodes(n));
+          compoundCandidates.push(...collectCompoundCandidates(n));
+          attachToNewShadowRoots(n, pendingNodes, scheduleFlush);
         }
       }
       processBatch(textNodes);
       processCompoundBatch(compoundCandidates);
     }
-    mutationObserver = new MutationObserver((mutations) => {
-      for (const mut of mutations) {
-        if (mut.type === "childList") {
-          mut.addedNodes.forEach((n) => pendingNodes.add(n));
-        } else if (mut.type === "characterData") {
-          pendingNodes.add(mut.target);
-        }
-      }
+    function scheduleFlush() {
       if (!scheduled && pendingNodes.size > 0) {
         scheduled = true;
         setTimeout(flush, 250);
       }
-    });
+    }
+    function makeObserver() {
+      return new MutationObserver((mutations) => {
+        for (const mut of mutations) {
+          if (mut.type === "childList") {
+            mut.addedNodes.forEach((n) => pendingNodes.add(n));
+          } else if (mut.type === "characterData") {
+            pendingNodes.add(mut.target);
+          }
+        }
+        scheduleFlush();
+      });
+    }
+    mutationObserver = makeObserver();
     mutationObserver.observe(document.body, {
       childList: true,
       subtree: true,
       characterData: true,
+    });
+    // Attach observers to every shadow root already present
+    forEachShadowRoot(document.body, (sr) => {
+      if (observedShadowRoots.has(sr)) return;
+      observedShadowRoots.add(sr);
+      const obs = makeObserver();
+      obs.observe(sr, { childList: true, subtree: true, characterData: true });
+      shadowObservers.push(obs);
+    });
+  }
+
+  function attachToNewShadowRoots(root, pendingNodes, scheduleFlush) {
+    forEachShadowRoot(root, (sr) => {
+      if (observedShadowRoots.has(sr)) return;
+      observedShadowRoots.add(sr);
+      const obs = new MutationObserver((mutations) => {
+        for (const mut of mutations) {
+          if (mut.type === "childList") mut.addedNodes.forEach((n) => pendingNodes.add(n));
+          else if (mut.type === "characterData") pendingNodes.add(mut.target);
+        }
+        scheduleFlush();
+      });
+      obs.observe(sr, { childList: true, subtree: true, characterData: true });
+      shadowObservers.push(obs);
+      // Seed-process what's already inside this new shadow root
+      pendingNodes.add(sr);
     });
   }
 
@@ -706,6 +773,9 @@
       mutationObserver.disconnect();
       mutationObserver = null;
     }
+    shadowObservers.forEach((o) => o.disconnect());
+    shadowObservers = [];
+    observedShadowRoots = new WeakSet();
   }
 
   function enableAutoScan() {
