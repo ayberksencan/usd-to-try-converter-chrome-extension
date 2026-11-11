@@ -40,6 +40,32 @@
         <span class="toggle-switch" aria-hidden="true"></span>
       </label>
 
+      <hr class="divider" />
+
+      <div class="converter">
+        <div class="converter-title">Hızlı çevirici</div>
+        <div class="converter-row">
+          <input
+            id="convert-amount"
+            type="text"
+            inputmode="decimal"
+            class="converter-input"
+            placeholder="0"
+            value="1"
+            autocomplete="off"
+          />
+          <select id="convert-currency" class="converter-select">
+            <option value="USD">$ USD</option>
+            <option value="EUR">€ EUR</option>
+            <option value="GBP">£ GBP</option>
+            <option value="JPY">¥ JPY</option>
+            <option value="CHF">Fr CHF</option>
+            <option value="CNY">¥ CNY</option>
+          </select>
+        </div>
+        <div id="convert-result" class="converter-result">—</div>
+      </div>
+
       <div class="footer">
         Bir metni seçtiğinizde tooltip çıkar. Desteklenen: $, €, £, ¥, USD, EUR, GBP, JPY, CHF, CNY/RMB.
       </div>

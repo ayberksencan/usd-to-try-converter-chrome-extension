@@ -3,6 +3,11 @@ const sourceEl = document.getElementById("source");
 const updatedEl = document.getElementById("updated");
 const refreshBtn = document.getElementById("refresh");
 const autoScanCheckbox = document.getElementById("autoscan");
+const convertAmountEl = document.getElementById("convert-amount");
+const convertCurrencyEl = document.getElementById("convert-currency");
+const convertResultEl = document.getElementById("convert-result");
+
+let latestRates = null;
 
 const TARGET_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "CNY"];
 const CURRENCY_LABELS = {
@@ -67,9 +72,11 @@ function renderRates(response) {
     renderRatePlaceholder(response.error || "Kur alınamadı");
     sourceEl.textContent = "Hata";
     updatedEl.textContent = "";
+    updateConverter();
     return;
   }
   const r = response.rates;
+  latestRates = r;
   clearChildren(ratesListEl);
   for (const code of TARGET_CURRENCIES) {
     const meta = CURRENCY_LABELS[code];
@@ -103,7 +110,63 @@ function renderRates(response) {
   }
   sourceEl.textContent = sourceLabel(r.source) + (r.stale ? " · eski" : "");
   updatedEl.textContent = formatAgo(r.fetchedAt);
+  updateConverter();
 }
+
+const TRY_FORMATTER_CONV = new Intl.NumberFormat("tr-TR", {
+  style: "currency",
+  currency: "TRY",
+  maximumFractionDigits: 2,
+});
+
+function parseConverterAmount(raw) {
+  if (!raw) return NaN;
+  const s = String(raw).trim().replace(/\s/g, "");
+  if (!s) return NaN;
+  const hasComma = s.includes(","), hasDot = s.includes(".");
+  if (hasComma && hasDot) {
+    const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+    return ld > lc ? parseFloat(s.replace(/,/g, "")) : parseFloat(s.replace(/\./g, "").replace(",", "."));
+  }
+  if (hasComma) {
+    const p = s.split(",");
+    if (p.length > 2 || (p.length === 2 && p[1].length === 3)) return parseFloat(p.join(""));
+    return parseFloat(s.replace(",", "."));
+  }
+  if (hasDot) {
+    const p = s.split(".");
+    if (p.length > 2 || (p.length === 2 && p[1].length === 3)) return parseFloat(p.join(""));
+    return parseFloat(s);
+  }
+  return parseFloat(s);
+}
+
+function updateConverter() {
+  if (!convertAmountEl || !convertCurrencyEl || !convertResultEl) return;
+  if (!latestRates || !latestRates.rates) {
+    convertResultEl.textContent = "Kur bekleniyor…";
+    convertResultEl.classList.add("converter-result-dim");
+    return;
+  }
+  const amount = parseConverterAmount(convertAmountEl.value);
+  const code = convertCurrencyEl.value;
+  const rate = latestRates.rates[code];
+  if (!Number.isFinite(amount) || amount < 0) {
+    convertResultEl.textContent = "—";
+    convertResultEl.classList.add("converter-result-dim");
+    return;
+  }
+  if (!Number.isFinite(rate) || rate <= 0) {
+    convertResultEl.textContent = `${code} kuru bulunamadı`;
+    convertResultEl.classList.add("converter-result-dim");
+    return;
+  }
+  convertResultEl.textContent = TRY_FORMATTER_CONV.format(amount * rate);
+  convertResultEl.classList.remove("converter-result-dim");
+}
+
+if (convertAmountEl) convertAmountEl.addEventListener("input", updateConverter);
+if (convertCurrencyEl) convertCurrencyEl.addEventListener("change", updateConverter);
 
 async function loadRates() {
   renderRatePlaceholder("Yükleniyor…");

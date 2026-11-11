@@ -170,6 +170,30 @@
     return null;
   }
 
+  function parseFxAmountsAll(text) {
+    if (!text || typeof text !== "string") return [];
+    const normalized = normalizeSelectionText(text);
+    const out = [];
+    for (const m of normalized.matchAll(FX_REGEX_GLOBAL)) {
+      const entry = matchToEntry(m);
+      if (entry) out.push({ amount: entry.amount, currency: entry.currency });
+    }
+    return out;
+  }
+
+  function detectDiscountPair(amounts) {
+    if (!amounts || amounts.length < 2) return null;
+    const currency = amounts[0].currency;
+    if (!amounts.every((a) => a.currency === currency)) return null;
+    const uniqAmts = [...new Set(amounts.map((a) => a.amount))];
+    if (uniqAmts.length < 2) return null;
+    uniqAmts.sort((a, b) => a - b);
+    const current = uniqAmts[0];
+    const original = uniqAmts[uniqAmts.length - 1];
+    if (current <= 0 || original <= 0 || current >= original) return null;
+    return { currency, current, original };
+  }
+
   function findAllFxMatches(text) {
     const out = [];
     const iter = text.matchAll(FX_REGEX_GLOBAL);
@@ -218,6 +242,7 @@
       .tooltip.show { opacity: 1; transform: translateY(0); }
       .tooltip .amount { font-weight: 600; font-size: 14px; }
       .tooltip .meta { color: #9ca3af; font-size: 11px; margin-top: 3px; }
+      .tooltip .meta.discount { color: #4ade80; }
       .tooltip.error .amount { color: #fca5a5; }
     `;
     tooltipEl = document.createElement("div");
@@ -261,6 +286,42 @@
     metaDiv.textContent = `${sourceStr} · 1 ${currency} = ${rateStr} ₺ · ${agoStr}${staleStr}`;
     el.appendChild(amountDiv);
     el.appendChild(metaDiv);
+  }
+
+  function renderTooltipDiscount(currency, current, original, rateInfo) {
+    const el = ensureTooltip();
+    el.classList.remove("error");
+    clearChildren(el);
+    const rate = rateInfo.rates[currency];
+    if (!Number.isFinite(rate) || rate <= 0) {
+      renderTooltipError(`${currency} kuru bulunamadı`);
+      return;
+    }
+    const currentTry = current * rate;
+    const originalTry = original * rate;
+    const savingsTry = originalTry - currentTry;
+    const pct = Math.round(((original - current) / original) * 100);
+
+    const amountDiv = document.createElement("div");
+    amountDiv.className = "amount";
+    amountDiv.textContent = `≈ ${TRY_FORMATTER.format(currentTry)}`;
+
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "meta";
+    const sourceStr = CURRENCY_FORMATTERS[currency].format(current);
+    const rateStr = RATE_FORMATTER.format(rate);
+    const agoStr = formatAgo(rateInfo.fetchedAt);
+    const staleStr = rateInfo.stale ? " · eski" : "";
+    metaDiv.textContent = `${sourceStr} · 1 ${currency} = ${rateStr} ₺ · ${agoStr}${staleStr}`;
+
+    const discountDiv = document.createElement("div");
+    discountDiv.className = "meta discount";
+    const originalSourceStr = CURRENCY_FORMATTERS[currency].format(original);
+    discountDiv.textContent = `Eski: ${originalSourceStr} (${TRY_FORMATTER.format(originalTry)}) · tasarruf ${TRY_FORMATTER.format(savingsTry)} (-%${pct})`;
+
+    el.appendChild(amountDiv);
+    el.appendChild(metaDiv);
+    el.appendChild(discountDiv);
   }
 
   function renderTooltipError(message) {
@@ -345,6 +406,21 @@
     positionTooltip(rect);
   }
 
+  async function showTooltipForDiscount(pair, rect) {
+    if (tooltipHideTimer) {
+      clearTimeout(tooltipHideTimer);
+      tooltipHideTimer = null;
+    }
+    const response = await fetchRates(false);
+    if (!response.ok) {
+      renderTooltipError(response.error);
+      positionTooltip(rect);
+      return;
+    }
+    renderTooltipDiscount(pair.currency, pair.current, pair.original, response.rates);
+    positionTooltip(rect);
+  }
+
   let lastSelectionKey = null;
   let selectionTimer = null;
 
@@ -361,8 +437,8 @@
       }
       const text = sel.toString();
       if (!text || text.length > 200) return;
-      const parsed = parseFxAmount(text);
-      if (!parsed) {
+      const allAmounts = parseFxAmountsAll(text);
+      if (allAmounts.length === 0) {
         if (lastSelectionKey !== null) {
           lastSelectionKey = null;
           hideTooltip();
@@ -372,8 +448,15 @@
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) return;
-      lastSelectionKey = `${parsed.currency}:${parsed.amount}`;
-      showTooltipForMatch(parsed.currency, parsed.amount, rect);
+      const pair = detectDiscountPair(allAmounts);
+      if (pair) {
+        lastSelectionKey = `D:${pair.currency}:${pair.current}:${pair.original}`;
+        showTooltipForDiscount(pair, rect);
+      } else {
+        const first = allAmounts[0];
+        lastSelectionKey = `${first.currency}:${first.amount}`;
+        showTooltipForMatch(first.currency, first.amount, rect);
+      }
     }, 120);
   }
 
@@ -452,7 +535,7 @@
 
     const raw = el.textContent;
     if (!raw) return false;
-    if (raw.length < 3 || raw.length > 60) return false;
+    if (raw.length < 3 || raw.length > 100) return false;
     if (!/\d/.test(raw)) return false;
     if (!/[\$€£¥]|(?:USD|EUR|GBP|JPY|CHF|CNY|RMB)\b/i.test(raw)) return false;
 
@@ -466,7 +549,7 @@
     if (distinct.size > 1) return false;
 
     const totalCoverage = matches.reduce((s, m) => s + m.text.length, 0);
-    if (totalCoverage / normalized.length < 0.6) return false;
+    if (totalCoverage / normalized.length < 0.4) return false;
 
     el.classList.add(HL_CLASS);
     el.setAttribute(HL_AMOUNT_ATTR, String(matches[0].amount));
@@ -479,7 +562,9 @@
     if (root.nodeType === Node.DOCUMENT_NODE) root = document.body;
     if (!root || root.nodeType !== Node.ELEMENT_NODE) return [];
     const out = [];
-    const candidates = root.querySelectorAll("span, a, td, em, strong, b, mark, small, ins, del");
+    const candidates = root.querySelectorAll(
+      "span, a, td, em, strong, b, mark, small, ins, del, p, h1, h2, h3, h4, h5, h6, li, label, button, dd, dt"
+    );
     for (const el of candidates) {
       if (el.classList.contains(HL_CLASS)) continue;
       if (el.hasAttribute(HL_CURRENCY_ATTR)) continue;
@@ -487,7 +572,7 @@
       const tc = el.textContent;
       if (!tc) continue;
       const len = tc.length;
-      if (len < 3 || len > 60) continue;
+      if (len < 3 || len > 100) continue;
       out.push(el);
     }
     return out;
