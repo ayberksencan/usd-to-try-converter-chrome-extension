@@ -473,9 +473,9 @@
   document.addEventListener(
     "mousedown",
     (e) => {
-      if (!tooltipHost || !tooltipHost.contains(e.target)) {
-        hideTooltip(true);
-      }
+      if (!tooltipHost) return;
+      const path = typeof e.composedPath === "function" ? e.composedPath() : [e.target];
+      if (!path.includes(tooltipHost)) hideTooltip(true);
     },
     true
   );
@@ -795,12 +795,19 @@
     unwrapAllHighlights();
   }
 
+  function findHighlightHost(e) {
+    const path = typeof e.composedPath === "function" ? e.composedPath() : [e.target];
+    for (const el of path) {
+      if (!(el instanceof Element)) continue;
+      if (el.classList && el.classList.contains(HL_CLASS)) return el;
+    }
+    return null;
+  }
+
   document.addEventListener(
     "mouseover",
     (e) => {
-      const target = e.target;
-      if (!(target instanceof Element)) return;
-      const host = target.closest(`.${HL_CLASS}`);
+      const host = findHighlightHost(e);
       if (!host) return;
       const amount = parseFloat(host.getAttribute(HL_AMOUNT_ATTR));
       const currency = host.getAttribute(HL_CURRENCY_ATTR);
@@ -814,9 +821,7 @@
   document.addEventListener(
     "mouseout",
     (e) => {
-      const target = e.target;
-      if (!(target instanceof Element)) return;
-      const host = target.closest(`.${HL_CLASS}`);
+      const host = findHighlightHost(e);
       if (!host) return;
       const related = e.relatedTarget;
       if (related instanceof Element && host.contains(related)) return;
