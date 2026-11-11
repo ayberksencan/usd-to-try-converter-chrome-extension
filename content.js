@@ -549,7 +549,8 @@
     if (distinct.size > 1) return false;
 
     const totalCoverage = matches.reduce((s, m) => s + m.text.length, 0);
-    if (totalCoverage / normalized.length < 0.4) return false;
+    const minCov = normalized.length <= 30 ? 0.2 : 0.4;
+    if (totalCoverage / normalized.length < minCov) return false;
 
     el.classList.add(HL_CLASS);
     el.setAttribute(HL_AMOUNT_ATTR, String(matches[0].amount));
